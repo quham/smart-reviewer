@@ -20,8 +20,22 @@ export default function ArticleCard({ article, onAnalyze }: ArticleCardProps) {
     return `${diffInDays} days ago`;
   };
 
+  const handleCardClick = () => {
+    if (article.url) {
+      window.open(article.url, '_blank');
+    }
+  };
+
+  const handleAnalyzeClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    onAnalyze();
+  };
+
   return (
-    <article className="bg-surface rounded-lg shadow-material overflow-hidden hover:shadow-material-lg transition-shadow">
+    <article 
+      className="bg-surface rounded-lg shadow-material overflow-hidden hover:shadow-material-lg transition-shadow cursor-pointer"
+      onClick={handleCardClick}
+    >
       {article.image && (
         <img 
           src={article.image}
@@ -55,7 +69,7 @@ export default function ArticleCard({ article, onAnalyze }: ArticleCardProps) {
             {article.source.name}
           </div>
           <Button 
-            onClick={onAnalyze}
+            onClick={handleAnalyzeClick}
             className="bg-primary hover:bg-primary-dark text-white"
             size="sm"
           >

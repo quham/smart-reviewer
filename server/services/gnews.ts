@@ -1,3 +1,5 @@
+import 'dotenv/config';
+
 interface GNewsSource {
   name: string;
   url: string;

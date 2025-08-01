@@ -1,57 +1,105 @@
-import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, timestamp, jsonb, integer } from "drizzle-orm/pg-core";
-import { createInsertSchema } from "drizzle-zod";
+import mongoose from "mongoose";
 import { z } from "zod";
 
-export const users = pgTable("users", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  username: text("username").notNull().unique(),
-  password: text("password").notNull(),
+// MongoDB Schemas
+const userSchema = new mongoose.Schema({
+  username: { type: String, required: true, unique: true },
+  password: { type: String, required: true },
+}, { timestamps: true });
+
+const articleSchema = new mongoose.Schema({
+  title: { type: String, required: true },
+  description: String,
+  content: String,
+  url: { type: String, required: true, unique: true },
+  urlToImage: String,
+  publishedAt: { type: Date, required: true },
+  source: { type: mongoose.Schema.Types.Mixed, required: true },
+  author: String,
+}, { timestamps: true });
+
+const analysisSchema = new mongoose.Schema({
+  articleId: { type: mongoose.Schema.Types.ObjectId, ref: 'Article', required: true },
+  summary: { type: String, required: true },
+  sentiment: { type: String, required: true },
+  confidence: { type: Number, required: true }, // percentage 0-100
+  positiveScore: { type: Number, required: true },
+  neutralScore: { type: Number, required: true },
+  negativeScore: { type: Number, required: true },
+}, { timestamps: true });
+
+// Mongoose Models
+export const User = mongoose.model('User', userSchema);
+export const Article = mongoose.model('Article', articleSchema);
+export const Analysis = mongoose.model('Analysis', analysisSchema);
+
+// Zod Validation Schemas
+export const insertUserSchema = z.object({
+  username: z.string().min(1, "Username is required"),
+  password: z.string().min(1, "Password is required"),
 });
 
-export const articles = pgTable("articles", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  title: text("title").notNull(),
-  description: text("description"),
-  content: text("content"),
-  url: text("url").notNull(),
-  urlToImage: text("url_to_image"),
-  publishedAt: timestamp("published_at").notNull(),
-  source: jsonb("source").notNull(),
-  author: text("author"),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
+export const insertArticleSchema = z.object({
+  title: z.string().min(1, "Title is required"),
+  description: z.string().optional(),
+  content: z.string().optional(),
+  url: z.string().url("Valid URL is required"),
+  urlToImage: z.string().optional(),
+  publishedAt: z.string().or(z.date()),
+  source: z.object({
+    name: z.string(),
+    url: z.string().optional(),
+  }),
+  author: z.string().optional(),
 });
 
-export const analyses = pgTable("analyses", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  articleId: varchar("article_id").references(() => articles.id).notNull(),
-  summary: text("summary").notNull(),
-  sentiment: text("sentiment").notNull(),
-  confidence: integer("confidence").notNull(), // percentage 0-100
-  positiveScore: integer("positive_score").notNull(),
-  neutralScore: integer("neutral_score").notNull(),
-  negativeScore: integer("negative_score").notNull(),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
+export const insertAnalysisSchema = z.object({
+  articleId: z.string().min(1, "Article ID is required"),
+  summary: z.string().min(1, "Summary is required"),
+  sentiment: z.string().min(1, "Sentiment is required"),
+  confidence: z.number().min(0).max(100),
+  positiveScore: z.number().min(0).max(100),
+  neutralScore: z.number().min(0).max(100),
+  negativeScore: z.number().min(0).max(100),
 });
 
-export const insertUserSchema = createInsertSchema(users).pick({
-  username: true,
-  password: true,
-});
-
-export const insertArticleSchema = createInsertSchema(articles).omit({
-  id: true,
-  createdAt: true,
-});
-
-export const insertAnalysisSchema = createInsertSchema(analyses).omit({
-  id: true,
-  createdAt: true,
-});
-
+// TypeScript Types
 export type InsertUser = z.infer<typeof insertUserSchema>;
-export type User = typeof users.$inferSelect;
-export type Article = typeof articles.$inferSelect;
+export type User = mongoose.Document & {
+  username: string;
+  password: string;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
+export type Article = mongoose.Document & {
+  title: string;
+  description?: string;
+  content?: string;
+  url: string;
+  urlToImage?: string;
+  publishedAt: Date;
+  source: {
+    name: string;
+    url?: string;
+  };
+  author?: string;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
 export type InsertArticle = z.infer<typeof insertArticleSchema>;
-export type Analysis = typeof analyses.$inferSelect;
+
+export type Analysis = mongoose.Document & {
+  articleId: mongoose.Types.ObjectId;
+  summary: string;
+  sentiment: string;
+  confidence: number;
+  positiveScore: number;
+  neutralScore: number;
+  negativeScore: number;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
 export type InsertAnalysis = z.infer<typeof insertAnalysisSchema>;

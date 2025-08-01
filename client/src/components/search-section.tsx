@@ -71,7 +71,7 @@ export default function SearchSection({ onSearch }: SearchSectionProps) {
         <div className="flex justify-between items-center">
           <div className="text-sm text-gray-600 flex items-center">
             <Info className="w-4 h-4 mr-1" />
-            Powered by GNews API - 100 requests/day limit
+            Powered by GNews API & OpenRouter
           </div>
           <Button type="submit" className="bg-primary hover:bg-primary-dark text-white px-6 py-3">
             <Search className="w-4 h-4 mr-2" />

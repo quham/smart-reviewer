@@ -2,19 +2,24 @@ import { useState } from "react";
 import SearchSection from "@/components/search-section";
 import ArticleCard from "@/components/article-card";
 import AnalysisModal from "@/components/analysis-modal";
-import AnalysisResults from "@/components/analysis-results";
+import AnalysisResultsModal from "@/components/analysis-results-modal";
 import AnalysisHistory from "@/components/analysis-history";
 import { useQuery } from "@tanstack/react-query";
 import { NewsArticle, AnalysisResult } from "@/lib/types";
 import { Skeleton } from "@/components/ui/skeleton";
 import { AlertCircle, Newspaper, Database } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 
 export default function Home() {
   const [searchResults, setSearchResults] = useState<NewsArticle[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [selectedArticle, setSelectedArticle] = useState<NewsArticle | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [summaryStatus, setSummaryStatus] = useState<'idle' | 'loading' | 'complete'>('idle');
+  const [sentimentStatus, setSentimentStatus] = useState<'idle' | 'loading' | 'complete'>('idle');
   const [currentAnalysis, setCurrentAnalysis] = useState<AnalysisResult | null>(null);
+  const [showResultsModal, setShowResultsModal] = useState(false);
+  const { toast } = useToast();
 
   const { data: analysesData, refetch: refetchAnalyses } = useQuery({
     queryKey: ["/api/analyses"],
@@ -47,6 +52,8 @@ export default function Home() {
   const handleAnalyze = async (article: NewsArticle) => {
     setSelectedArticle(article);
     setIsAnalyzing(true);
+    setSummaryStatus('loading');
+    setSentimentStatus('loading');
     
     try {
       const response = await fetch("/api/analyze", {
@@ -61,17 +68,36 @@ export default function Home() {
 
       const data = await response.json();
       setCurrentAnalysis(data.analysis);
+      setSummaryStatus('complete');
+      setSentimentStatus('complete');
       refetchAnalyses();
+      setShowResultsModal(true); // Show results modal after analysis completes
+      
+      // Show toast notification for automatic save
+      toast({
+        title: "Analysis Complete",
+        description: "Analysis has been automatically saved to your history.",
+      });
     } catch (error) {
       console.error("Analysis error:", error);
+      setSummaryStatus('idle');
+      setSentimentStatus('idle');
     } finally {
       setIsAnalyzing(false);
+      setSelectedArticle(null); // Auto-close modal when analysis completes
     }
   };
 
   const closeModal = () => {
     setSelectedArticle(null);
     setIsAnalyzing(false);
+    setSummaryStatus('idle');
+    setSentimentStatus('idle');
+  };
+
+  const closeResultsModal = () => {
+    setShowResultsModal(false);
+    setCurrentAnalysis(null);
   };
 
   const analysisCount = analysesData?.length || 0;
@@ -141,14 +167,19 @@ export default function Home() {
           <AnalysisModal
             article={selectedArticle}
             isAnalyzing={isAnalyzing}
+            summaryStatus={summaryStatus}
+            sentimentStatus={sentimentStatus}
             onClose={closeModal}
           />
         )}
 
-        {/* Analysis Results */}
-        {currentAnalysis && (
-          <AnalysisResults analysis={currentAnalysis} />
-        )}
+        {/* Analysis Results Modal */}
+        <AnalysisResultsModal
+          analysis={currentAnalysis}
+          isOpen={showResultsModal}
+          onClose={closeResultsModal}
+          title="Latest Analysis Results"
+        />
 
         {/* Analysis History */}
         <AnalysisHistory analyses={analysesData || []} onRefetch={refetchAnalyses} />
@@ -185,7 +216,7 @@ export default function Home() {
           </div>
           
           <div className="mt-6 pt-6 border-t border-gray-200 text-center text-sm text-gray-500">
-            <p>&copy; 2024 Smart Reviewer. Built with React and Express. Powered by GNews API and OpenAI.</p>
+            <p>&copy; 2025 Smart Reviewer. Powered by GNews API and OpenRouter.</p>
           </div>
         </div>
       </footer>

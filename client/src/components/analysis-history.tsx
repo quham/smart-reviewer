@@ -4,9 +4,10 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { AnalysisWithArticle } from "@/lib/types";
-import { Eye, Share, Trash2, Download } from "lucide-react";
+import { Eye, ExternalLink, Trash2, Download } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
+import AnalysisResultsModal from "@/components/analysis-results-modal";
 
 interface AnalysisHistoryProps {
   analyses: AnalysisWithArticle[];
@@ -15,6 +16,8 @@ interface AnalysisHistoryProps {
 
 export default function AnalysisHistory({ analyses, onRefetch }: AnalysisHistoryProps) {
   const [sentimentFilter, setSentimentFilter] = useState("");
+  const [selectedAnalysis, setSelectedAnalysis] = useState<AnalysisWithArticle | null>(null);
+  const [showAnalysisModal, setShowAnalysisModal] = useState(false);
   const { toast } = useToast();
 
   const getSentimentColor = (sentiment: string) => {
@@ -31,9 +34,11 @@ export default function AnalysisHistory({ analyses, onRefetch }: AnalysisHistory
   const formatTimeAgo = (dateString: string) => {
     const date = new Date(dateString);
     const now = new Date();
-    const diffInHours = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60));
+    const diffInMinutes = Math.floor((now.getTime() - date.getTime()) / (1000 * 60));
     
-    if (diffInHours < 1) return "Just now";
+    if (diffInMinutes < 1) return "Just now";
+    if (diffInMinutes < 60) return `${diffInMinutes} minutes ago`;
+    const diffInHours = Math.floor(diffInMinutes / 60);
     if (diffInHours < 24) return `${diffInHours} hours ago`;
     const diffInDays = Math.floor(diffInHours / 24);
     return `${diffInDays} days ago`;
@@ -54,6 +59,71 @@ export default function AnalysisHistory({ analyses, onRefetch }: AnalysisHistory
         variant: "destructive",
       });
     }
+  };
+
+  const handleViewAnalysis = (analysis: AnalysisWithArticle) => {
+    setSelectedAnalysis(analysis);
+    setShowAnalysisModal(true);
+  };
+
+  const closeAnalysisModal = () => {
+    setShowAnalysisModal(false);
+    setSelectedAnalysis(null);
+  };
+
+  const handleOpenArticle = (url: string) => {
+    window.open(url, '_blank');
+  };
+
+  const handleDownloadCSV = () => {
+    if (filteredAnalyses.length === 0) {
+      toast({
+        title: "No Data to Download",
+        description: "There are no analyses to export.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Create CSV content
+    const headers = [
+      "Article Title",
+      "Source",
+      "Sentiment",
+      "Confidence (%)",
+      "Summary",
+      "Analyzed Date",
+      "Article URL"
+    ];
+
+    const csvContent = [
+      headers.join(","),
+      ...filteredAnalyses.map(analysis => [
+        `"${(analysis.article?.title || "Unknown Article").replace(/"/g, '""')}"`,
+        `"${(analysis.article?.source?.name || "Unknown").replace(/"/g, '""')}"`,
+        `"${analysis.sentiment}"`,
+        analysis.confidence,
+        `"${analysis.summary.replace(/"/g, '""')}"`,
+        `"${new Date(analysis.createdAt).toLocaleDateString()}"`,
+        `"${analysis.article?.url || ""}"`
+      ].join(","))
+    ].join("\n");
+
+    // Create and download file
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.setAttribute("href", url);
+    link.setAttribute("download", `analysis-history-${new Date().toISOString().split('T')[0]}.csv`);
+    link.style.visibility = "hidden";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    toast({
+      title: "Download Successful",
+      description: `Exported ${filteredAnalyses.length} analyses to CSV.`,
+    });
   };
 
   const filteredAnalyses = sentimentFilter && sentimentFilter !== "all"
@@ -80,7 +150,13 @@ export default function AnalysisHistory({ analyses, onRefetch }: AnalysisHistory
                 <SelectItem value="negative">Negative</SelectItem>
               </SelectContent>
             </Select>
-            <Button variant="ghost" size="sm">
+            <Button 
+              variant="ghost" 
+              size="sm"
+              onClick={handleDownloadCSV}
+              disabled={filteredAnalyses.length === 0}
+              title="Download analysis history as CSV"
+            >
               <Download className="w-4 h-4" />
             </Button>
           </div>
@@ -101,11 +177,15 @@ export default function AnalysisHistory({ analyses, onRefetch }: AnalysisHistory
           </TableHeader>
           <TableBody>
             {filteredAnalyses.map((analysis) => (
-              <TableRow key={analysis.id} className="hover:bg-gray-50">
+              <TableRow 
+                key={analysis.id} 
+                className="hover:bg-gray-50 cursor-pointer"
+                onClick={() => handleViewAnalysis(analysis)}
+              >
                 <TableCell>
                   <div className="max-w-xs">
                     <div className="font-medium text-gray-900 truncate">
-                      {analysis.article.title}
+                      {analysis.article?.title || "Unknown Article"}
                     </div>
                     <div className="text-sm text-gray-500 truncate">
                       {analysis.summary.substring(0, 80)}...
@@ -113,7 +193,7 @@ export default function AnalysisHistory({ analyses, onRefetch }: AnalysisHistory
                   </div>
                 </TableCell>
                 <TableCell className="text-sm text-gray-900">
-                  {analysis.article.source?.name || "Unknown"}
+                  {analysis.article?.source?.name || "Unknown"}
                 </TableCell>
                 <TableCell>
                   <Badge className={getSentimentColor(analysis.sentiment)}>
@@ -128,16 +208,36 @@ export default function AnalysisHistory({ analyses, onRefetch }: AnalysisHistory
                 </TableCell>
                 <TableCell>
                   <div className="flex items-center space-x-2">
-                    <Button variant="ghost" size="sm">
+                    <Button 
+                      variant="ghost" 
+                      size="sm"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleViewAnalysis(analysis);
+                      }}
+                    >
                       <Eye className="w-4 h-4" />
                     </Button>
-                    <Button variant="ghost" size="sm">
-                      <Share className="w-4 h-4" />
+                    <Button 
+                      variant="ghost" 
+                      size="sm"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (analysis.article?.url) {
+                          handleOpenArticle(analysis.article.url);
+                        }
+                      }}
+                      disabled={!analysis.article?.url}
+                    >
+                      <ExternalLink className="w-4 h-4" />
                     </Button>
                     <Button 
                       variant="ghost" 
                       size="sm" 
-                      onClick={() => handleDelete(analysis.id)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDelete(analysis.id);
+                      }}
                       className="text-error hover:text-red-700"
                     >
                       <Trash2 className="w-4 h-4" />
@@ -165,6 +265,14 @@ export default function AnalysisHistory({ analyses, onRefetch }: AnalysisHistory
           </div>
         </div>
       )}
+
+      {/* Analysis Results Modal */}
+      <AnalysisResultsModal
+        analysis={selectedAnalysis}
+        isOpen={showAnalysisModal}
+        onClose={closeAnalysisModal}
+        title="Analysis Details"
+      />
     </section>
   );
 }

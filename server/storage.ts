@@ -1,24 +1,20 @@
 import { 
-  articles, 
-  analyses, 
-  type Article, 
+  Article, 
+  Analysis, 
+  User,
   type InsertArticle, 
-  type Analysis, 
   type InsertAnalysis,
-  type User, 
   type InsertUser 
 } from "@shared/schema";
-import { db } from "./db";
-import { eq, desc } from "drizzle-orm";
 
 export interface IStorage {
-  getUser(id: string): Promise<User | undefined>;
-  getUserByUsername(username: string): Promise<User | undefined>;
+  getUser(id: string): Promise<User | null>;
+  getUserByUsername(username: string): Promise<User | null>;
   createUser(user: InsertUser): Promise<User>;
   
   // Article methods
   createArticle(article: InsertArticle): Promise<Article>;
-  getArticleByUrl(url: string): Promise<Article | undefined>;
+  getArticleByUrl(url: string): Promise<Article | null>;
   
   // Analysis methods
   createAnalysis(analysis: InsertAnalysis): Promise<Analysis>;
@@ -28,83 +24,53 @@ export interface IStorage {
 }
 
 export class DatabaseStorage implements IStorage {
-  async getUser(id: string): Promise<User | undefined> {
-    const [user] = await db.select().from(users).where(eq(users.id, id));
-    return user || undefined;
+  async getUser(id: string): Promise<User | null> {
+    return await User.findById(id);
   }
 
-  async getUserByUsername(username: string): Promise<User | undefined> {
-    const [user] = await db.select().from(users).where(eq(users.username, username));
-    return user || undefined;
+  async getUserByUsername(username: string): Promise<User | null> {
+    return await User.findOne({ username });
   }
 
   async createUser(insertUser: InsertUser): Promise<User> {
-    const [user] = await db
-      .insert(users)
-      .values(insertUser)
-      .returning();
-    return user;
+    const user = new User(insertUser);
+    return await user.save();
   }
 
   async createArticle(insertArticle: InsertArticle): Promise<Article> {
-    const [article] = await db
-      .insert(articles)
-      .values(insertArticle)
-      .returning();
-    return article;
+    const article = new Article(insertArticle);
+    return await article.save();
   }
 
-  async getArticleByUrl(url: string): Promise<Article | undefined> {
-    const [article] = await db.select().from(articles).where(eq(articles.url, url));
-    return article || undefined;
+  async getArticleByUrl(url: string): Promise<Article | null> {
+    return await Article.findOne({ url });
   }
 
   async createAnalysis(insertAnalysis: InsertAnalysis): Promise<Analysis> {
-    const [analysis] = await db
-      .insert(analyses)
-      .values(insertAnalysis)
-      .returning();
-    return analysis;
+    const analysis = new Analysis(insertAnalysis);
+    return await analysis.save();
   }
 
   async getAnalysesByArticleId(articleId: string): Promise<Analysis[]> {
-    return await db.select().from(analyses).where(eq(analyses.articleId, articleId));
+    return await Analysis.find({ articleId });
   }
 
   async getAllAnalyses(): Promise<(Analysis & { article: Article })[]> {
-    const result = await db
-      .select({
-        id: analyses.id,
-        articleId: analyses.articleId,
-        summary: analyses.summary,
-        sentiment: analyses.sentiment,
-        confidence: analyses.confidence,
-        positiveScore: analyses.positiveScore,
-        neutralScore: analyses.neutralScore,
-        negativeScore: analyses.negativeScore,
-        createdAt: analyses.createdAt,
-        article: {
-          id: articles.id,
-          title: articles.title,
-          description: articles.description,
-          content: articles.content,
-          url: articles.url,
-          urlToImage: articles.urlToImage,
-          publishedAt: articles.publishedAt,
-          source: articles.source,
-          author: articles.author,
-          createdAt: articles.createdAt,
-        }
-      })
-      .from(analyses)
-      .innerJoin(articles, eq(analyses.articleId, articles.id))
-      .orderBy(desc(analyses.createdAt));
-
-    return result;
+    const analyses = await Analysis.find()
+      .populate('articleId')
+      .sort({ createdAt: -1 })
+      .lean();
+    
+    // Transform the data to match the expected format
+    return analyses.map(analysis => ({
+      ...analysis,
+      article: analysis.articleId,
+      id: analysis._id
+    }));
   }
 
   async deleteAnalysis(id: string): Promise<void> {
-    await db.delete(analyses).where(eq(analyses.id, id));
+    await Analysis.findByIdAndDelete(id);
   }
 }
 
