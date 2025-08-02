@@ -8,7 +8,6 @@ import { z } from "zod";
 
 const searchSchema = z.object({
   query: z.string().min(1, "Search query is required"),
-  category: z.string().optional(),
 });
 
 const analyzeSchema = z.object({
@@ -29,8 +28,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Search news articles
   app.post("/api/search", async (req, res) => {
     try {
-      const { query, category } = searchSchema.parse(req.body);
-      const articles = await searchNews(query, category);
+      const { query } = searchSchema.parse(req.body);
+      const articles = await searchNews(query);
       res.json({ articles });
     } catch (error) {
       res.status(400).json({ 

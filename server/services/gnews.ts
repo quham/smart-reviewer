@@ -20,7 +20,7 @@ interface GNewsResponse {
   articles: GNewsArticle[];
 }
 
-export async function searchNews(query: string, category?: string): Promise<GNewsArticle[]> {
+export async function searchNews(query: string): Promise<GNewsArticle[]> {
   const apiKey = process.env.GNEWS_API_KEY || process.env.GNEWS_API_KEY_ENV_VAR || "default_key";
   
   if (!apiKey || apiKey === "default_key") {
@@ -36,10 +36,6 @@ export async function searchNews(query: string, category?: string): Promise<GNew
       max: "10",
       apikey: apiKey,
     });
-
-    if (category && category !== "") {
-      params.append("category", category);
-    }
 
     const response = await fetch(`${baseUrl}?${params}`);
     

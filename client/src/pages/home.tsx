@@ -26,13 +26,13 @@ export default function Home() {
     select: (data: any) => data.analyses || [],
   });
 
-  const handleSearch = async (query: string, category?: string) => {
+  const handleSearch = async (query: string) => {
     setIsSearching(true);
     try {
       const response = await fetch("/api/search", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query, category }),
+        body: JSON.stringify({ query }),
       });
 
       if (!response.ok) {
